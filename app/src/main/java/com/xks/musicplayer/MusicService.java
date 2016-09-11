@@ -20,6 +20,7 @@ public class MusicService extends Service {
     MediaPlayer mediaPlayer;//播放歌曲的类
     private int currentPlaying = 0;//正在播放的歌曲
     private static final String TAG = "MusicService";
+    public static boolean isPlaying = false;//是否处于播放状态
     public static boolean isPause = false;//是否处于暂停状态
 
     /**
@@ -49,6 +50,7 @@ public class MusicService extends Service {
      * 服务与activity进行交互的方法
      */
     public class MyBinder extends Binder {
+
         /**
          * 播放指定位置的歌曲
          *
@@ -61,27 +63,35 @@ public class MusicService extends Service {
                  * Resets the MediaPlayer to its uninitialized state. After calling this method,
                  * you will have to initialize it again by setting the data source and calling prepare().
                  */
-                if (!isPause) {//没有暂停
-                    return;//=>多次点击无反应
-                } else if (currentPlaying != position) {//暂停了且当前正在暂停的歌与点击的歌不是同一首歌
-                    mediaPlayer.reset();//reset后需要重新确定要播放的音乐的所在路径
-                    mediaPlayer.setDataSource(music.getMusicPath());
-                    mediaPlayer.prepareAsync();
-                    mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                        @Override
-                        public void onPrepared(MediaPlayer mp) {
-                            mp.start();
-                        }
-                    });
-                } else {//暂停了且当前正在暂停的歌与点击的歌是同一首歌
-                    mediaPlayer.start();//=>无需prepare,直接start就行
+                if (isPlaying&&isPause) {//播放状态但是被暂停了
+                    if (currentPlaying != position) {//正在播放的与点击的歌不是同一首
+                        setMusic(music);
+                    } else if (currentPlaying == position) {//是同一首歌
+                        mediaPlayer.start();//=>无需prepare,直接start就行
+                        isPause = false;
+                    }
+                }else{//没有播放
+                    setMusic(music);
                 }
-                isPause = false;
                 currentPlaying = position;
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
+        }
+
+        private void setMusic(MusicBean music) throws IOException {
+            mediaPlayer.reset();//reset后需要重新确定要播放的音乐所在路径
+            mediaPlayer.setDataSource(music.getMusicPath());
+            mediaPlayer.prepareAsync();
+            mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer mp) {
+                    mp.start();
+                    isPause = false;
+                    isPlaying = true;
+                }
+            });
         }
 
         /**
@@ -90,6 +100,7 @@ public class MusicService extends Service {
         public void pauseMusic() {
             if (mediaPlayer.isPlaying()) {//正在播放时
                 mediaPlayer.pause();
+                isPlaying = true;
                 isPause = true;
             }
         }
@@ -122,7 +133,9 @@ public class MusicService extends Service {
 
     @Override
     public void onDestroy() {
+        //在服务中的onDestroy方法中对mediaPlayer资源进行释放
         mediaPlayer.release();
+        //将mediaPlayer赋空便于垃圾回收器进行回收
         mediaPlayer = null;
         super.onDestroy();
     }
